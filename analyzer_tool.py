@@ -11,6 +11,9 @@ import requests
 import ipaddress
 from urllib.parse import urlparse
 
+# ================= VERSION =================
+VERSION = "1.0.1"
+
 # ================= COLORES =================
 C_RESET = "\033[0m"
 C_GREEN = "\033[92m"
@@ -52,6 +55,24 @@ TEXT = {
         "vpn": "VPN / Proxy / Hosting"
     }
 }
+
+# ================= UPDATE ONLINE =================
+def check_update(silent=True):
+    try:
+        url = "https://raw.githubusercontent.com/MoralesM6614/analyzer-tool/main/version.txt"
+        remote_version = requests.get(url, timeout=5).text.strip()
+
+        if remote_version != VERSION:
+            print(C_YELLOW + "\n⚠️ ACTUALIZACIÓN DISPONIBLE" + C_RESET)
+            print(f"📌 Versión local : {VERSION}")
+            print(f"🚀 Versión remota: {remote_version}")
+            print("🔗 https://github.com/MoralesM6614/analyzer-tool\n")
+        else:
+            if not silent:
+                print(C_GREEN + "\n✅ Estás usando la última versión\n" + C_RESET)
+    except:
+        if not silent:
+            print(C_RED + "\n⚠️ No se pudo comprobar actualizaciones\n" + C_RESET)
 
 # ================= UTILIDADES =================
 def clear():
@@ -286,8 +307,9 @@ def curl_tool():
 def about():
     clear()
     header("ℹ️ INFORMACIÓN")
-    print("""
+    print(f"""
 ANALYZER TOOL
+Versión : {VERSION}
 Contacto: https://t.me/Cracke2
 Plataforma: Android / Termux
 """)
@@ -295,6 +317,8 @@ Plataforma: Android / Termux
 
 # ================= MENÚ =================
 def menu():
+    check_update(silent=True)
+
     while True:
         clear()
         header("ANALYZER TOOL")
