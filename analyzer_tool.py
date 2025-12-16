@@ -6,22 +6,19 @@
 # Plataforma: Android / Termux
 # ============================================
 
-import os
-import sys
-import socket
-import requests
-import ipaddress
-import subprocess
-import random
+import os, sys, socket, requests, ipaddress, subprocess, random, json, threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import urlparse, parse_qs
 
 # ================= VERSION =================
-VERSION = "3.2"
+VERSION = "3.0"
 
 # ================= COLORES =================
 C_RESET  = "\033[0m"
 C_GREEN  = "\033[92m"
 C_RED    = "\033[91m"
 C_YELLOW = "\033[93m"
+C_BLUE   = "\033[94m"
 C_CYAN   = "\033[96m"
 C_BOLD   = "\033[1m"
 
@@ -31,184 +28,136 @@ LANG = "ES"
 TEXT = {
     "ES": {
         "menu": "Seleccione una opción",
-        "invalid": "Opción inválida",
         "press": "Presione ENTER para continuar...",
-        "not_found": "No encontrados",
-        "residential": "Red residencial",
-        "vpn": "VPN / Proxy / Hosting",
-        "updated": "✔ Actualizado"
+        "invalid": "Opción inválida",
+        "again": "¿Generar nuevos datos? (S/N): "
+    },
+    "EN": {
+        "menu": "Select an option",
+        "press": "Press ENTER to continue...",
+        "invalid": "Invalid option",
+        "again": "Generate new data? (Y/N): "
     }
 }
 
 # ================= UTILIDADES =================
-def clear():
-    os.system("clear")
-
-def pause():
-    input(f"\n{TEXT[LANG]['press']}")
+def clear(): os.system("clear")
+def pause(): input(f"\n{TEXT[LANG]['press']}")
 
 def header(title):
     print(C_CYAN + "=" * 70)
     print(C_BOLD + title)
     print("=" * 70 + C_RESET)
 
-# ================= EMAIL REAL =================
-def generate_email(first, last, cc):
-    domains = {
-        "us": ["gmail.com", "yahoo.com", "outlook.com"],
-        "co": ["gmail.com", "outlook.com"],
-        "mx": ["gmail.com", "hotmail.com"],
-        "ar": ["gmail.com"],
-        "cl": ["gmail.com"],
-        "br": ["gmail.com", "hotmail.com"],
-        "in": ["gmail.com", "yahoo.in"],
-        "de": ["gmail.com", "web.de"],
-        "uk": ["gmail.com", "outlook.co.uk"]
+# ================= FAKE DATA =================
+DOMAINS = ["gmail.com", "outlook.com", "yahoo.com", "hotmail.com"]
+
+COUNTRIES = {
+    "us": {"name": "United States", "cities": ["New York","Chicago","Philadelphia"], "states": ["NY","PA","CA"], "zip": lambda: str(random.randint(10000,99999))},
+    "co": {"name": "Colombia", "cities": ["Bogotá","Medellín","Cali"], "states": ["Cundinamarca","Antioquia"], "zip": lambda: str(random.randint(110000,999999))},
+    "br": {"name": "Brazil", "cities": ["São Paulo","Rio de Janeiro"], "states": ["SP","RJ"], "zip": lambda: f"{random.randint(10000,99999)}-{random.randint(100,999)}"},
+    "ar": {"name": "Argentina", "cities": ["Buenos Aires","Córdoba"], "states": ["BA","CBA"], "zip": lambda: str(random.randint(1000,9999))},
+    "cl": {"name": "Chile", "cities": ["Santiago","Valparaíso"], "states": ["RM","V"], "zip": lambda: str(random.randint(1000000,9999999))},
+    "in": {"name": "India", "cities": ["Delhi","Mumbai","Bangalore"], "states": ["Delhi","MH","KA"], "zip": lambda: str(random.randint(100000,999999))},
+    "uk": {"name": "United Kingdom", "cities": ["London","Manchester"], "states": ["England"], "zip": lambda: "SW1A " + str(random.randint(1,9)) + "AA"},
+    "de": {"name": "Germany", "cities": ["Berlin","Munich"], "states": ["BE","BY"], "zip": lambda: str(random.randint(10000,99999))}
+}
+
+NAMES = ["Lucas","Mateo","Juan","Carlos","Ana","Maria","Sofia","Laura","Daniel","Pedro"]
+LASTNAMES = ["Walker","Gomez","Perez","Silva","Rodriguez","Lopez","Fernandez","Muller","Schmidt"]
+
+def generate_fake_data(code):
+    c = COUNTRIES[code]
+    name = f"{random.choice(NAMES)} {random.choice(LASTNAMES)}"
+    email = f"{name.replace(' ','').lower()}{random.randint(10,999)}@{random.choice(DOMAINS)}"
+    return {
+        "name": name,
+        "street": f"{random.randint(1,9999)} {random.choice(['Main','Market','Oak','Pine'])} Street",
+        "city": random.choice(c["cities"]),
+        "state": random.choice(c["states"]),
+        "postal_code": c["zip"](),
+        "country": c["name"],
+        "email": email
     }
-    return f"{first.lower()}.{last.lower()}@{random.choice(domains[cc])}"
 
-# ================= CPF / CEP BR =================
-def generate_cpf():
-    nums = [random.randint(0,9) for _ in range(9)]
-    for _ in range(2):
-        val = sum((len(nums)+1-i)*v for i,v in enumerate(nums)) % 11
-        nums.append(0 if val < 2 else 11-val)
-    return "".join(map(str, nums))
-
-def generate_cep():
-    return f"{random.randint(10000,99999)}-{random.randint(100,999)}"
-
-# ================= FAKE ADDRESS =================
-def fake_address():
+# ================= FAKE GENERATOR MENU =================
+def fake_generator():
     clear()
     header("🏠 FAKE ADDRESS GENERATOR")
 
-    country = input("País (us co br mx ar cl in uk de): ").strip().lower()
+    while True:
+        code = input("País (us, co, br, in, uk, de, ar, cl): ").lower().strip()
+        if code not in COUNTRIES:
+            print(C_RED + "País no soportado" + C_RESET)
+            pause()
+            return
 
-    data = {
-        "us": ("United States", "New York", "California"),
-        "co": ("Colombia", "Medellín", "Antioquia"),
-        "br": ("Brazil", "São Paulo", "SP"),
-        "mx": ("Mexico", "Guadalajara", "Jalisco"),
-        "ar": ("Argentina", "Buenos Aires", "BA"),
-        "cl": ("Chile", "Santiago", "RM"),
-        "in": ("India", "Mumbai", "Maharashtra"),
-        "uk": ("United Kingdom", "London", "England"),
-        "de": ("Germany", "Berlin", "Berlin"),
-    }
+        try:
+            count = int(input("Cantidad a generar: "))
+        except:
+            count = 1
 
-    if country not in data:
-        print(C_RED + "País no soportado" + C_RESET)
-        pause()
-        return
+        clear()
+        header(f"📍 Address For {COUNTRIES[code]['name']}")
 
-    first = random.choice(["Lucas","Daniel","Mateo","Raj","Arjun","John","Pedro","Luis","Carlos"])
-    last  = random.choice(["Walker","Gómez","Silva","Patel","Müller","Smith","Fernández"])
-
-    email = generate_email(first, last, country)
-    street = f"{random.randint(10,9999)} {random.choice(['Market St','Main St','Oak Ave','Park Rd'])}"
-
-    print(f"""
-Adress For {data[country][0]}
-━━━━━━━━━━━━━━━━━━━━
-Name        : {first} {last}
-Street      : {street}
-City        : {data[country][1]}
-State       : {data[country][2]}
-Postal Code : {generate_cep() if country=='br' else random.randint(10000,99999)}
-Country     : {data[country][0]}
-Email       : {email}
+        for i in range(count):
+            d = generate_fake_data(code)
+            print(f"""
+━━━━━━━━━━━━━━━━━━━
+Name        : {d['name']}
+Street      : {d['street']}
+City        : {d['city']}
+State       : {d['state']}
+Postal Code : {d['postal_code']}
+Country     : {d['country']}
+Email       : {d['email']}
+━━━━━━━━━━━━━━━━━━━
 """)
 
-    if country == "br":
-        print(f"CPF         : {generate_cpf()}")
+        again = input(TEXT[LANG]["again"]).lower()
+        if again not in ("s","y"):
+            break
 
-    pause()
+# ================= API LOCAL =================
+class LocalAPI(BaseHTTPRequestHandler):
+    def do_GET(self):
+        parsed = urlparse(self.path)
+        if parsed.path != "/fake":
+            self.send_response(404); self.end_headers(); return
 
-# ================= ANALYZER FUNCTIONS =================
-def network_status():
-    clear()
-    header("🌐 ESTADO DE RED")
-    ip = requests.get("https://api.ipify.org").text
-    data = requests.get("http://ip-api.com/json").json()
-    print(f"IP: {ip}\nPaís: {data.get('country')}\nISP: {data.get('isp')}")
-    pause()
+        params = parse_qs(parsed.query)
+        country = params.get("country",[None])[0]
+        count = int(params.get("count",[1])[0])
 
-def analyze_ip():
-    clear()
-    header("📌 ANÁLISIS IP")
-    ip = input("IP: ")
-    try:
-        ipaddress.ip_address(ip)
-        data = requests.get(f"http://ip-api.com/json/{ip}").json()
-        for k,v in data.items():
-            print(f"{k:15}: {v}")
-    except:
-        print("IP inválida")
-    pause()
+        if country not in COUNTRIES:
+            self.send_response(400); self.end_headers()
+            self.wfile.write(b"Invalid country")
+            return
 
-def resolve_dns():
-    clear()
-    header("📡 DNS")
-    d = input("Dominio: ")
-    try:
-        for i in socket.gethostbyname_ex(d)[2]:
-            print(i)
-    except:
-        print("No encontrado")
-    pause()
+        data = [generate_fake_data(country) for _ in range(min(count,50))]
 
-def domain_ips():
-    clear()
-    header("🌐 IPv4 / IPv6")
-    d = input("Dominio: ")
-    try:
-        for i in socket.getaddrinfo(d,None):
-            print(i[4][0])
-    except:
-        print("No encontrado")
-    pause()
+        self.send_response(200)
+        self.send_header("Content-Type","application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(data,indent=2).encode())
 
-def find_subdomains():
-    clear()
-    header("🧩 SUBDOMINIOS")
-    d = input("Dominio: ")
-    for p in ["www","api","mail","cdn"]:
-        try:
-            socket.gethostbyname(f"{p}.{d}")
-            print(f"{p}.{d}")
-        except:
-            pass
-    pause()
-
-def site_info():
-    clear()
-    header("📄 INFO WEB")
-    u = input("URL: ")
-    if not u.startswith("http"):
-        u = "http://" + u
-    r = requests.get(u)
-    print("Servidor:", r.headers.get("Server"))
-    print("Tipo:", r.headers.get("Content-Type"))
-    pause()
-
-def curl_tool():
-    clear()
-    header("🧰 CURL")
-    os.system(f"curl -I {input('URL: ')}")
-    pause()
+def start_api():
+    def run():
+        HTTPServer(("127.0.0.1",5050),LocalAPI).serve_forever()
+    threading.Thread(target=run,daemon=True).start()
 
 # ================= MENÚ =================
 def menu():
+    start_api()
     while True:
         clear()
         header("ANALYZER TOOL")
-        print(C_GREEN + f"Versión {VERSION} • {TEXT[LANG]['updated']}" + C_RESET)
+        print(C_GREEN + f"Versión {VERSION} • ✔ Activo • API Local 127.0.0.1:5050" + C_RESET)
 
         print("""
-1) 🌐 Estado de red
-2) 📌 Análisis IP
-3) 📡 Resolver DNS
+1) 🌐 Estado de red actual
+2) 📌 Análisis técnico de IP
+3) 📡 Resolver dominio DNS
 4) 🌐 IPv4 / IPv6
 5) 🧩 Buscar subdominios
 6) 📄 Información del sitio
@@ -217,16 +166,9 @@ def menu():
 0) ❌ Salir
 """)
 
-        op = input(f"{TEXT[LANG]['menu']}: ")
+        op = input(f"{TEXT[LANG]['menu']}: ").strip()
 
-        if   op == "1": network_status()
-        elif op == "2": analyze_ip()
-        elif op == "3": resolve_dns()
-        elif op == "4": domain_ips()
-        elif op == "5": find_subdomains()
-        elif op == "6": site_info()
-        elif op == "7": curl_tool()
-        elif op == "8": fake_address()
+        if op == "8": fake_generator()
         elif op == "0": sys.exit()
         else:
             print(TEXT[LANG]["invalid"])
