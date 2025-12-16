@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # ============================================
 # ANALYZER TOOL
-# Owner: Cracke2
-# Telegram: https://t.me/Cracke2
-# Platform: Android / Termux
+# Autor: Cracke2
+# Contacto: https://t.me/Cracke2
+# Plataforma: Android / Termux
 # ============================================
 
 import os
@@ -11,15 +11,19 @@ import sys
 import socket
 import requests
 import ipaddress
+import subprocess
 
 # ================= VERSION =================
-VERSION = "3.1"
+VERSION = "3.0"
+GITHUB_REPO = "https://github.com/MoralesM6614/analyzer-tool"
+VERSION_URL = "https://raw.githubusercontent.com/MoralesM6614/analyzer-tool/main/version.txt"
 
 # ================= COLORES =================
 C_RESET  = "\033[0m"
 C_GREEN  = "\033[92m"
 C_RED    = "\033[91m"
 C_YELLOW = "\033[93m"
+C_BLUE   = "\033[94m"
 C_CYAN   = "\033[96m"
 C_BOLD   = "\033[1m"
 
@@ -35,8 +39,8 @@ TEXT = {
         "residential": "Red residencial",
         "vpn": "VPN / Proxy / Hosting",
         "updated": "✔ Actualizado",
-        "update": "⚠ Update disponible",
-        "no_connection": "Estado de versión desconocido"
+        "update_available": "⚠ Update disponible",
+        "no_connection": "Sin conexión",
     },
     "EN": {
         "menu": "Select an option",
@@ -46,21 +50,10 @@ TEXT = {
         "residential": "Residential network",
         "vpn": "VPN / Proxy / Hosting",
         "updated": "✔ Up to date",
-        "update": "⚠ Update available",
-        "no_connection": "Unknown version state"
+        "update_available": "⚠ Update available",
+        "no_connection": "No connection",
     }
 }
-
-# ================= UPDATE ONLINE =================
-def check_update():
-    try:
-        url = "https://raw.githubusercontent.com/MoralesM6614/analyzer-tool/main/version.txt"
-        remote = requests.get(url, timeout=5).text.strip()
-        if remote != VERSION:
-            return ("update", remote)
-        return ("ok", VERSION)
-    except:
-        return ("error", None)
 
 # ================= UTILIDADES =================
 def clear():
@@ -69,55 +62,76 @@ def clear():
 def pause():
     input(f"\n{TEXT[LANG]['press']}")
 
-def header():
+def header(title):
     print(C_CYAN + "=" * 70)
-    print(C_BOLD + "ANALYZER TOOL")
-    print("Owner     : Cracke2")
-    print("Telegram  : https://t.me/Cracke2")
+    print(C_BOLD + title)
     print("=" * 70 + C_RESET)
 
-def print_block(title, data: dict):
-    print(C_CYAN + title)
-    print("─" * 60 + C_RESET)
-    for k, v in data.items():
-        print(f"{k:<18}: {v}")
-    print(C_CYAN + "─" * 60 + C_RESET)
+# ================= UPDATE =================
+def check_update():
+    try:
+        r = requests.get(VERSION_URL, timeout=5)
+        remote = r.text.strip()
+        if remote != VERSION:
+            return ("update", remote)
+        return ("ok", remote)
+    except:
+        return ("error", None)
+
+def update_tool():
+    clear()
+    header("🔄 ACTUALIZAR HERRAMIENTA")
+
+    print("Actualizando desde GitHub...\n")
+    try:
+        subprocess.run(["git", "pull"], check=True)
+        print(C_GREEN + "\n✔ Herramienta actualizada correctamente" + C_RESET)
+    except:
+        print(C_RED + "\n✖ Error al actualizar (¿git instalado?)" + C_RESET)
+
+    pause()
 
 # ================= OPCIÓN 1 =================
 def network_status():
-    clear(); header()
+    clear()
+    header("🌐 ESTADO DE RED ACTUAL")
+
     try:
         ip_public = requests.get("https://api.ipify.org", timeout=5).text
         data = requests.get(
-            "http://ip-api.com/json/?fields=status,country,countryCode,city,zip,isp,as,proxy,hosting",
+            "http://ip-api.com/json/?fields=country,countryCode,city,zip,isp,as,proxy,hosting",
             timeout=8
         ).json()
     except:
         print(C_RED + "Error obteniendo datos de red" + C_RESET)
-        pause(); return
+        pause()
+        return
 
     net_type = TEXT[LANG]["vpn"] if data.get("proxy") or data.get("hosting") else TEXT[LANG]["residential"]
 
-    print_block("🌐 ESTADO DE RED ACTUAL", {
-        "IP pública": ip_public,
-        "País": f"{data.get('country')} [{data.get('countryCode')}]",
-        "Ciudad": data.get("city"),
-        "ZIP": data.get("zip"),
-        "Proveedor": data.get("isp"),
-        "ASN": data.get("as"),
-        "Tipo de red": net_type
-    })
+    print(f"""
+IP pública      : {ip_public}
+País            : {data.get('country')} [{data.get('countryCode')}]
+Ciudad          : {data.get('city')}
+ZIP             : {data.get('zip')}
+Proveedor red   : {data.get('isp')}
+ASN             : {data.get('as')}
+Tipo de red     : {net_type}
+""")
     pause()
 
 # ================= OPCIÓN 2 =================
 def analyze_ip():
-    clear(); header()
+    clear()
+    header("📌 ANÁLISIS TÉCNICO DE IP")
+
     ip = input("IP objetivo: ").strip()
     try:
         ipaddress.ip_address(ip)
     except:
         print(C_RED + "IP inválida" + C_RESET)
-        pause(); return
+        pause()
+        return
 
     data = requests.get(
         f"http://ip-api.com/json/{ip}?fields=country,countryCode,regionName,region,city,zip,lat,lon,timezone,isp,org,as,proxy,hosting",
@@ -126,56 +140,41 @@ def analyze_ip():
 
     net_type = TEXT[LANG]["vpn"] if data.get("proxy") or data.get("hosting") else TEXT[LANG]["residential"]
 
-    print_block("📌 ANÁLISIS TÉCNICO DE IP", {
-        "IP objetivo": ip,
-        "País": f"{data.get('country')} [{data.get('countryCode')}]",
-        "Región": f"{data.get('regionName')} ({data.get('region')})",
-        "Ciudad": data.get("city"),
-        "ZIP": data.get("zip"),
-        "Zona horaria": data.get("timezone"),
-        "Coordenadas": f"{data.get('lat')}, {data.get('lon')}",
-        "ISP": data.get("isp"),
-        "Organización": data.get("org"),
-        "ASN": data.get("as"),
-        "Tipo IP": net_type
-    })
+    print(f"""
+IP objetivo        : {ip}
+País               : {data.get('country')} [{data.get('countryCode')}]
+Región             : {data.get('regionName')} ({data.get('region')})
+Ciudad             : {data.get('city')}
+Código postal      : {data.get('zip')}
+Zona horaria       : {data.get('timezone')}
+Coordenadas        : {data.get('lat')}, {data.get('lon')}
+
+ISP                : {data.get('isp')}
+Organización       : {data.get('org')}
+ASN                : {data.get('as')}
+Tipo de IP         : {net_type}
+""")
     pause()
 
 # ================= OPCIÓN 3 =================
-def geolocation_only():
-    clear(); header()
-    ip = input("IP: ").strip()
-    data = requests.get(f"http://ip-api.com/json/{ip}", timeout=8).json()
-
-    print_block("🗺️ GEOLOCALIZACIÓN", {
-        "País": data.get("country"),
-        "Región": data.get("regionName"),
-        "Ciudad": data.get("city"),
-        "ZIP": data.get("zip"),
-        "Zona horaria": data.get("timezone")
-    })
-    pause()
-
-# ================= OPCIÓN 4 =================
 def resolve_dns():
-    clear(); header()
+    clear()
+    header("📡 RESOLVER DOMINIO (DNS)")
+
     domain = input("Dominio: ").strip()
     try:
         _, _, ips = socket.gethostbyname_ex(domain)
-        print_block("📡 DNS RESUELTO", {
-            "Dominio": domain,
-            "IPs": ", ".join(ips)
-        })
+        for ip in ips:
+            print(f"- {ip}")
     except:
-        print_block("📡 DNS RESUELTO", {
-            "Dominio": domain,
-            "Resultado": TEXT[LANG]["not_found"]
-        })
+        print(TEXT[LANG]["not_found"])
     pause()
 
-# ================= OPCIÓN 5 =================
+# ================= OPCIÓN 4 =================
 def domain_ips():
-    clear(); header()
+    clear()
+    header("🌐 IPv4 / IPv6")
+
     domain = input("Dominio: ").strip()
     ipv4, ipv6 = set(), set()
 
@@ -186,91 +185,72 @@ def domain_ips():
             elif info[0] == socket.AF_INET6:
                 ipv6.add(info[4][0])
     except:
-        print_block("🌐 IPs DEL DOMINIO", {"Resultado": TEXT[LANG]["not_found"]})
-        pause(); return
+        print(TEXT[LANG]["not_found"])
+        pause()
+        return
 
-    print_block("🌐 IPs DEL DOMINIO", {
-        "Dominio": domain,
-        "IPv4": ", ".join(ipv4) if ipv4 else "N/A",
-        "IPv6": ", ".join(ipv6) if ipv6 else "N/A"
-    })
+    print("\nIPv4:")
+    for i in ipv4: print(" ", i)
+    print("\nIPv6:")
+    for i in ipv6: print(" ", i)
+
     pause()
 
-# ================= OPCIÓN 6 =================
+# ================= OPCIÓN 5 =================
 def find_subdomains():
-    clear(); header()
+    clear()
+    header("🧩 BUSCAR SUBDOMINIOS")
+
     domain = input("Dominio: ").strip()
     found = set()
+    prefixes = ["www", "api", "m", "mail", "cdn", "static", "img"]
 
-    for p in ["www", "api", "m", "mail", "cdn", "static", "img"]:
+    for p in prefixes:
         try:
             socket.gethostbyname(f"{p}.{domain}")
             found.add(f"{p}.{domain}")
         except:
             pass
 
-    print_block("🧩 SUBDOMINIOS", {
-        "Dominio": domain,
-        "Cantidad": len(found),
-        "Subdominios": ", ".join(sorted(found)) if found else TEXT[LANG]["not_found"]
-    })
+    if found:
+        print(f"\nSubdominios encontrados ({len(found)}):")
+        for s in sorted(found):
+            print(" -", s)
+    else:
+        print(TEXT[LANG]["not_found"])
     pause()
 
-# ================= OPCIÓN 7 =================
-def site_status():
-    clear(); header()
+# ================= OPCIÓN 6 =================
+def site_info():
+    clear()
+    header("📄 INFORMACIÓN DEL SITIO")
+
     url = input("URL: ").strip()
     if not url.startswith("http"):
         url = "http://" + url
 
     try:
-        r = requests.get(url, timeout=8, allow_redirects=True)
-        print_block("🔍 ESTADO DEL SITIO", {
-            "URL final": r.url,
-            "HTTP": r.status_code,
-            "Servidor": r.headers.get("Server")
-        })
+        r = requests.get(url, timeout=8)
+        title = "N/A"
+        if "<title>" in r.text.lower():
+            title = r.text.lower().split("<title>")[1].split("</title>")[0]
+
+        print(f"""
+URL             : {r.url}
+Título          : {title}
+Servidor        : {r.headers.get('Server')}
+Contenido       : {r.headers.get('Content-Type')}
+Tamaño          : {len(r.content)/1024:.2f} KB
+""")
     except:
-        print_block("🔍 ESTADO DEL SITIO", {"Resultado": "No responde"})
+        print("No responde")
+
     pause()
 
-# ================= OPCIÓN 8 =================
-def site_info():
-    clear(); header()
-    url = input("URL: ").strip()
-    if not url.startswith("http"):
-        url = "http://" + url
-
-    r = requests.get(url, timeout=8)
-    html = r.text.lower()
-    title = html.split("<title>")[1].split("</title>")[0] if "<title>" in html else "N/A"
-
-    print_block("📄 INFORMACIÓN DEL SITIO", {
-        "Título": title,
-        "Servidor": r.headers.get("Server"),
-        "Contenido": r.headers.get("Content-Type"),
-        "Tamaño": f"{len(r.content)/1024:.2f} KB"
-    })
-    pause()
-
-# ================= OPCIÓN 9 =================
-def domain_network_info():
-    clear(); header()
-    domain = input("Dominio: ").strip()
-    ip = socket.gethostbyname(domain)
-    data = requests.get(f"http://ip-api.com/json/{ip}", timeout=8).json()
-
-    print_block("🌍 RED DEL DOMINIO", {
-        "IP": ip,
-        "Proveedor": data.get("isp"),
-        "ASN": data.get("as"),
-        "País": data.get("country")
-    })
-    pause()
-
-# ================= OPCIÓN 10 =================
+# ================= OPCIÓN 7 =================
 def curl_tool():
-    clear(); header()
+    clear()
+    header("🧰 CURL / HEADERS")
     url = input("URL: ").strip()
     os.system(f"curl -I {url}")
     pause()
@@ -280,43 +260,42 @@ def menu():
     status, remote = check_update()
 
     while True:
-        clear(); header()
+        clear()
+        header("ANALYZER TOOL")
 
-        if status == "update":
-            print(C_YELLOW + f"Versión {VERSION} • {TEXT[LANG]['update']} ({remote})" + C_RESET)
-        elif status == "ok":
+        if status == "ok":
             print(C_GREEN + f"Versión {VERSION} • {TEXT[LANG]['updated']}" + C_RESET)
+        elif status == "update":
+            print(C_YELLOW + f"Versión {VERSION} • {TEXT[LANG]['update_available']} ({remote})" + C_RESET)
         else:
             print(C_RED + TEXT[LANG]["no_connection"] + C_RESET)
 
         print("""
 1) 🌐 Estado de red actual
 2) 📌 Análisis técnico de IP
-3) 🗺️ Geolocalización
-4) 📡 Resolver dominio DNS
-5) 🌐 Direcciones IPv4 / IPv6
-6) 🧩 Buscar subdominios
-7) 🔍 Estado del sitio web
-8) 📄 Información básica del sitio
-9) 🌍 Red del dominio
-10) 🧰 Curl / Headers
+3) 📡 Resolver dominio DNS
+4) 🌐 IPv4 / IPv6
+5) 🧩 Buscar subdominios
+6) 📄 Información del sitio
+7) 🧰 Curl / Headers
+8) 🔄 Actualizar herramienta
 0) ❌ Salir
 """)
 
         op = input(f"{TEXT[LANG]['menu']}: ").strip()
+
         if   op == "1": network_status()
         elif op == "2": analyze_ip()
-        elif op == "3": geolocation_only()
-        elif op == "4": resolve_dns()
-        elif op == "5": domain_ips()
-        elif op == "6": find_subdomains()
-        elif op == "7": site_status()
-        elif op == "8": site_info()
-        elif op == "9": domain_network_info()
-        elif op == "10": curl_tool()
+        elif op == "3": resolve_dns()
+        elif op == "4": domain_ips()
+        elif op == "5": find_subdomains()
+        elif op == "6": site_info()
+        elif op == "7": curl_tool()
+        elif op == "8": update_tool()
         elif op == "0": sys.exit()
         else:
-            print(TEXT[LANG]["invalid"]); pause()
+            print(TEXT[LANG]["invalid"])
+            pause()
 
 if __name__ == "__main__":
     menu()
