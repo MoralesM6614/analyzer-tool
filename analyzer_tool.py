@@ -14,7 +14,7 @@ import ipaddress
 import subprocess
 
 # ================= VERSION =================
-VERSION = "1.0"
+VERSION = "1.2"
 
 # ================= COLORES =================
 C_RESET  = "\033[0m"
