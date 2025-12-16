@@ -12,6 +12,7 @@ import socket
 import requests
 import ipaddress
 import subprocess
+import random
 
 # ================= VERSION =================
 VERSION = "3.1"
@@ -81,21 +82,18 @@ def check_update():
 def update_tool():
     clear()
     header("🔄 ACTUALIZAR HERRAMIENTA")
-
     print("Actualizando desde GitHub...\n")
     try:
         subprocess.run(["git", "pull"], check=True)
         print(C_GREEN + "\n✔ Herramienta actualizada correctamente" + C_RESET)
     except:
         print(C_RED + "\n✖ Error al actualizar (¿git instalado?)" + C_RESET)
-
     pause()
 
 # ================= OPCIÓN 1 =================
 def network_status():
     clear()
     header("🌐 ESTADO DE RED ACTUAL")
-
     try:
         ip_public = requests.get("https://api.ipify.org", timeout=5).text
         data = requests.get(
@@ -160,7 +158,6 @@ Tipo de IP         : {net_type}
 def resolve_dns():
     clear()
     header("📡 RESOLVER DOMINIO (DNS)")
-
     domain = input("Dominio: ").strip()
     try:
         _, _, ips = socket.gethostbyname_ex(domain)
@@ -174,10 +171,8 @@ def resolve_dns():
 def domain_ips():
     clear()
     header("🌐 IPv4 / IPv6")
-
     domain = input("Dominio: ").strip()
     ipv4, ipv6 = set(), set()
-
     try:
         for info in socket.getaddrinfo(domain, None):
             if info[0] == socket.AF_INET:
@@ -188,30 +183,25 @@ def domain_ips():
         print(TEXT[LANG]["not_found"])
         pause()
         return
-
     print("\nIPv4:")
     for i in ipv4: print(" ", i)
     print("\nIPv6:")
     for i in ipv6: print(" ", i)
-
     pause()
 
 # ================= OPCIÓN 5 =================
 def find_subdomains():
     clear()
     header("🧩 BUSCAR SUBDOMINIOS")
-
     domain = input("Dominio: ").strip()
     found = set()
     prefixes = ["www", "api", "m", "mail", "cdn", "static", "img"]
-
     for p in prefixes:
         try:
             socket.gethostbyname(f"{p}.{domain}")
             found.add(f"{p}.{domain}")
         except:
             pass
-
     if found:
         print(f"\nSubdominios encontrados ({len(found)}):")
         for s in sorted(found):
@@ -224,17 +214,14 @@ def find_subdomains():
 def site_info():
     clear()
     header("📄 INFORMACIÓN DEL SITIO")
-
     url = input("URL: ").strip()
     if not url.startswith("http"):
         url = "http://" + url
-
     try:
         r = requests.get(url, timeout=8)
         title = "N/A"
         if "<title>" in r.text.lower():
             title = r.text.lower().split("<title>")[1].split("</title>")[0]
-
         print(f"""
 URL             : {r.url}
 Título          : {title}
@@ -244,7 +231,6 @@ Tamaño          : {len(r.content)/1024:.2f} KB
 """)
     except:
         print("No responde")
-
     pause()
 
 # ================= OPCIÓN 7 =================
@@ -253,6 +239,42 @@ def curl_tool():
     header("🧰 CURL / HEADERS")
     url = input("URL: ").strip()
     os.system(f"curl -I {url}")
+    pause()
+
+# ================= OPCIÓN 8 =================
+def generate_identity():
+    clear()
+    header("🧍 GENERADOR DE IDENTIDADES / DIRECCIONES")
+
+    try:
+        amount = int(input("Cantidad de identidades: ").strip())
+        if amount < 1:
+            raise ValueError
+    except:
+        print(C_RED + "Cantidad inválida" + C_RESET)
+        pause()
+        return
+
+    try:
+        r = requests.get(f"https://randomuser.me/api/?results={amount}", timeout=10).json()
+        users = r["results"]
+    except:
+        print(C_RED + "Error obteniendo datos" + C_RESET)
+        pause()
+        return
+
+    for i, u in enumerate(users, 1):
+        print(C_GREEN + f"IDENTIDAD #{i}" + C_RESET)
+        print(f"""
+Nombre      : {u['name']['first']} {u['name']['last']}
+Dirección   : {u['location']['street']['number']} {u['location']['street']['name']}
+Ciudad      : {u['location']['city']}
+Estado      : {u['location']['state']}
+ZIP         : {u['location']['postcode']}
+País        : {u['location']['country']}
+Teléfono    : {u['phone']}
+Email       : {u['email']}
+""")
     pause()
 
 # ================= MENÚ =================
@@ -278,7 +300,8 @@ def menu():
 5) 🧩 Buscar subdominios
 6) 📄 Información del sitio
 7) 🧰 Curl / Headers
-8) 🔄 Actualizar herramienta
+8) 🧍 Generar identidad / dirección
+9) 🔄 Actualizar herramienta
 0) ❌ Salir
 """)
 
@@ -291,7 +314,8 @@ def menu():
         elif op == "5": find_subdomains()
         elif op == "6": site_info()
         elif op == "7": curl_tool()
-        elif op == "8": update_tool()
+        elif op == "8": generate_identity()
+        elif op == "9": update_tool()
         elif op == "0": sys.exit()
         else:
             print(TEXT[LANG]["invalid"])
