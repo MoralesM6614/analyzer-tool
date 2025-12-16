@@ -6,219 +6,165 @@
 # Plataforma: Android / Termux
 # ============================================
 
-import os, sys, socket, requests, ipaddress, random, string, subprocess, json, time
-from urllib.parse import urlparse
+import os, sys, socket, requests, ipaddress, subprocess, random, json, threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import urlparse, parse_qs
 
-# ================= AUTO-INSTALACIÓN =================
-def install(pkg):
-    subprocess.call([sys.executable, "-m", "pip", "install", pkg, "--quiet"])
+# ================= INSTALACIÓN AUTOMÁTICA =================
+def install_package(package):
+    subprocess.check_call([sys.executable, "-m", "pip", "install", package, "--quiet"])
 
 try:
     from faker import Faker
     import pycountry
-except:
-    install("faker")
-    install("pycountry")
+except ImportError:
+    print("🔄 Instalando dependencias...")
+    install_package("Faker")
+    install_package("pycountry")
     from faker import Faker
     import pycountry
+    print("✅ Listo!")
 
-# ================= CONFIG =================
-VERSION = "3.3"
-LANG = "ES"
+# ================= VERSION =================
+VERSION = "3.0"
 
 # ================= COLORES =================
-C_RESET="\033[0m"; C_GREEN="\033[92m"; C_RED="\033[91m"
-C_YELLOW="\033[93m"; C_CYAN="\033[96m"; C_BOLD="\033[1m"
+C_RESET  = "\u001B[0m"
+C_GREEN  = "\u001B[92m"
+C_RED    = "\u001B[91m"
+C_YELLOW = "\u001B[93m"
+C_BLUE   = "\u001B[94m"
+C_CYAN   = "\u001B[96m"
+C_BOLD   = "\u001B[1m"
 
-# ================= TEXTOS =================
+# ================= IDIOMA =================
+LANG = "ES"
+
 TEXT = {
     "ES": {
-        "menu":"Seleccione una opción",
-        "invalid":"Opción inválida",
-        "press":"Presione ENTER para continuar...",
-        "again":"¿Generar nuevos datos? (S/N): ",
-        "copy":"¿Copiar al portapapeles? (S/N): "
+        "menu": "Seleccione una opción",
+        "press": "Presione ENTER para continuar...",
+        "invalid": "Opción inválida",
+        "again": "¿Generar nuevos datos? (S/N): ",
+        "country_not_found": "País no encontrado. Usando formato genérico."
     },
     "EN": {
-        "menu":"Select an option",
-        "invalid":"Invalid option",
-        "press":"Press ENTER to continue...",
-        "again":"Generate again? (Y/N): ",
-        "copy":"Copy to clipboard? (Y/N): "
+        "menu": "Select an option",
+        "press": "Press ENTER to continue...",
+        "invalid": "Invalid option",
+        "again": "Generate new data? (Y/N): ",
+        "country_not_found": "Country not found. Using generic format."
     }
 }
 
-# ================= UTIL =================
-def clear(): os.system("clear")
-def pause(): input("\n" + TEXT[LANG]["press"])
-
-def header(t):
-    print(C_CYAN + "="*70)
-    print(C_BOLD + t)
-    print("="*70 + C_RESET)
-
-# ================= OPCIÓN 1 =================
-def network_status():
-    clear(); header("🌐 ESTADO DE RED ACTUAL")
+# ================= FUNCIONES DE URL =================
+def clean_url(url):
+    """Limpia la URL acortada y devuelve la URL final."""
     try:
-        ip = requests.get("https://api.ipify.org",timeout=5).text
-        data = requests.get(f"http://ip-api.com/json/{ip}",timeout=5).json()
-        print(f"""
-IP pública : {ip}
-País       : {data.get('country')}
-Ciudad     : {data.get('city')}
-ISP        : {data.get('isp')}
-ASN        : {data.get('as')}
-""")
-    except:
-        print(C_RED+"Error de red"+C_RESET)
-    pause()
+        response = requests.get(url, allow_redirects=True, timeout=5)
+        final_url = response.url
+        if final_url == url:
+            return "El enlace no está acortado."
+        else:
+            return f"URL final: {final_url}"
+    except Exception as e:
+        return f"Error al procesar el enlace: {e}"
 
-# ================= OPCIÓN 2 =================
-def analyze_ip():
-    clear(); header("📌 ANÁLISIS TÉCNICO DE IP")
-    ip = input("IP: ").strip()
-    try: ipaddress.ip_address(ip)
-    except:
-        print(C_RED+"IP inválida"+C_RESET); pause(); return
+def shorten_url():
+    """Permite al usuario acortar un enlace mediante una API."""
+    url = input("Introduce la URL que deseas acortar: ").strip()
+    if not url.startswith("http"):
+        url = "http://" + url
 
-    d = requests.get(f"http://ip-api.com/json/{ip}",timeout=5).json()
-    print(f"""
-IP        : {ip}
-País      : {d.get('country')}
-Región    : {d.get('regionName')}
-Ciudad    : {d.get('city')}
-ZIP       : {d.get('zip')}
-Lat/Lon   : {d.get('lat')}, {d.get('lon')}
-ISP       : {d.get('isp')}
-ASN       : {d.get('as')}
-""")
-    pause()
+    response = requests.get(f"http://tinyurl.com/api-create.php?url={url}")
+    if response.status_code == 200:
+        print(f"Enlace acortado: {response.text}")
+    else:
+        print("Error al acortar el enlace.")
 
-# ================= OPCIÓN 3 =================
-def resolve_dns():
-    clear(); header("📡 RESOLVER DNS")
-    d = input("Dominio: ").strip()
+# ================= FUNCIONES DE IP Y SCAM =================
+def check_ip_scam(ip):
+    """Verifica si la IP está en la base de datos de ScamAnalytics."""
+    api_key = 'TU_API_KEY_AQUI'
+    url = f"https://api.scamanalytics.com/v1/ip/{ip}?apikey={api_key}"
     try:
-        for ip in socket.gethostbyname_ex(d)[2]:
-            print("•", ip)
-    except:
-        print("No encontrado")
-    pause()
+        response = requests.get(url)
+        data = response.json()
+        if data['is_scam']:
+            print(f"IP {ip} está marcada como potencialmente peligrosa.")
+        else:
+            print(f"IP {ip} es segura.")
+    except Exception as e:
+        print(f"Error al consultar la IP: {e}")
 
-# ================= OPCIÓN 4 =================
-def domain_ips():
-    clear(); header("🌐 IPv4 / IPv6")
-    d = input("Dominio: ").strip()
-    v4,v6=set(),set()
-    try:
-        for i in socket.getaddrinfo(d,None):
-            (v4 if i[0]==socket.AF_INET else v6).add(i[4][0])
-    except: pass
-    print("IPv4:", ", ".join(v4) or "N/A")
-    print("IPv6:", ", ".join(v6) or "N/A")
-    pause()
+# ================= FAKE DATA GENERATOR =================
+DOMAINS = ["gmail.com", "outlook.com", "yahoo.com", "hotmail.com"]
 
-# ================= OPCIÓN 5 =================
-def find_subdomains():
-    clear(); header("🧩 SUBDOMINIOS")
-    d=input("Dominio: ").strip()
-    found=[]
-    for p in ["www","api","mail","m","cdn","static"]:
-        try:
-            socket.gethostbyname(f"{p}.{d}")
-            found.append(f"{p}.{d}")
-        except: pass
-    print("\n".join(found) if found else "No encontrados")
-    pause()
+COUNTRIES = {
+    "us": {"name": "United States", "cities": ["New York","Chicago","Philadelphia"], "states": ["NY","PA","CA"], "zip": lambda: str(random.randint(10000,99999))},
+    "co": {"name": "Colombia", "cities": ["Bogotá","Medellín","Cali"], "states": ["Cundinamarca","Antioquia"], "zip": lambda: str(random.randint(110000,999999))},
+    "br": {"name": "Brazil", "cities": ["São Paulo","Rio de Janeiro"], "states": ["SP","RJ"], "zip": lambda: f"{random.randint(10000,99999)}-{random.randint(100,999)}"},
+    "ar": {"name": "Argentina", "cities": ["Buenos Aires","Córdoba"], "states": ["BA","CBA"], "zip": lambda: str(random.randint(1000,9999))},
+    "cl": {"name": "Chile", "cities": ["Santiago","Valparaíso"], "states": ["RM","V"], "zip": lambda: str(random.randint(1000000,9999999))},
+    "in": {"name": "India", "cities": ["Delhi","Mumbai","Bangalore"], "states": ["Delhi","MH","KA"], "zip": lambda: str(random.randint(100000,999999))},
+    "uk": {"name": "United Kingdom", "cities": ["London","Manchester"], "states": ["England"], "zip": lambda: "SW1A " + str(random.randint(1,9)) + "AA"},
+    "de": {"name": "Germany", "cities": ["Berlin","Munich"], "states": ["BE","BY"], "zip": lambda: str(random.randint(10000,99999))}
+}
 
-# ================= OPCIÓN 6 =================
-def site_info():
-    clear(); header("📄 INFORMACIÓN DEL SITIO")
-    url=input("URL: ").strip()
-    if not url.startswith("http"): url="http://"+url
-    try:
-        r=requests.get(url,timeout=5)
-        print(f"""
-URL       : {r.url}
-Estado    : {r.status_code}
-Servidor  : {r.headers.get('Server')}
-Tipo      : {r.headers.get('Content-Type')}
-Tamaño    : {len(r.content)/1024:.2f} KB
-""")
-    except:
-        print("No responde")
-    pause()
+NAMES = ["Lucas","Mateo","Juan","Carlos","Ana","Maria","Sofia","Laura","Daniel","Pedro"]
+LASTNAMES = ["Walker","Gomez","Perez","Silva","Rodriguez","Lopez","Fernandez","Muller","Schmidt"]
 
-# ================= OPCIÓN 7 =================
-def curl_headers():
-    clear(); header("🧰 CURL / HEADERS")
-    url=input("URL: ").strip()
-    os.system(f"curl -I {url}")
-    pause()
-
-# ================= OPCIÓN 8 =================
-def password_generator():
-    clear(); header("🔐 PASSWORD GENERATOR")
-    length=int(input("Longitud (ej 16): ") or 16)
-    chars=string.ascii_letters+string.digits+"@#$%&*-_+?"
-    pwd="".join(random.choice(chars) for _ in range(length))
-    print("\nPassword:", C_GREEN+pwd+C_RESET)
-    c=input(TEXT[LANG]["copy"]).lower()
-    if c in ("s","y"):
-        os.system(f'echo "{pwd}" | termux-clipboard-set')
-    pause()
-
-# ================= OPCIÓN 9 =================
-def temp_email():
-    clear(); header("📧 EMAIL TEMPORAL")
-    login="".join(random.choice(string.ascii_lowercase+string.digits) for _ in range(8))
-    domain="1secmail.com"
-    email=f"{login}@{domain}"
-    print("Email:", C_GREEN+email+C_RESET)
-
-    input("\nPresione ENTER para ver bandeja...")
-    try:
-        inbox=requests.get(f"https://www.1secmail.com/api/v1/?action=getMessages&login={login}&domain={domain}").json()
-        if not inbox:
-            print("Bandeja vacía")
-        for m in inbox:
-            msg=requests.get(f"https://www.1secmail.com/api/v1/?action=readMessage&login={login}&domain={domain}&id={m['id']}").json()
-            print(f"\nFrom: {msg['from']}\nSubject: {msg['subject']}\n{msg['textBody']}")
-    except:
-        print("Error al consultar")
-    pause()
+def generate_fake_data(code):
+    c = COUNTRIES[code]
+    name = f"{random.choice(NAMES)} {random.choice(LASTNAMES)}"
+    email = f"{name.replace(' ','').lower()}{random.randint(10,999)}@{random.choice(DOMAINS)}"
+    return {
+        "name": name,
+        "street": f"{random.randint(1,9999)} {random.choice(['Main','Market','Oak','Pine'])} Street",
+        "city": random.choice(c["cities"]),
+        "state": random.choice(c["states"]),
+        "postal_code": c["zip"](),
+        "country": c["name"],
+        "email": email
+    }
 
 # ================= MENÚ =================
 def menu():
     while True:
-        clear(); header("ANALYZER TOOL")
-        print(C_GREEN+f"Versión {VERSION}"+C_RESET)
+        clear()
+        header("ANALYZER TOOL")
         print("""
-1) 🌐 Estado de red
-2) 📌 Analizar IP
-3) 📡 Resolver DNS
+1) 🌐 Estado de red actual
+2) 📌 Análisis técnico de IP
+3) 📡 Resolver dominio DNS
 4) 🌐 IPv4 / IPv6
-5) 🧩 Subdominios
-6) 📄 Info sitio
+5) 🧩 Buscar subdominios
+6) 📄 Información del sitio
 7) 🧰 Curl / Headers
-8) 🔐 Password Generator
-9) 📧 Email temporal
+8) 🏠 Fake Address Generator
+9) 🧳 Limpiar URL
+10) 🔗 Acortar URL
+11) 🔍 Verificar IP con ScamAnalytics
 0) ❌ Salir
 """)
-        op=input(TEXT[LANG]["menu"]+": ").strip()
-        if   op=="1":network_status()
-        elif op=="2":analyze_ip()
-        elif op=="3":resolve_dns()
-        elif op=="4":domain_ips()
-        elif op=="5":find_subdomains()
-        elif op=="6":site_info()
-        elif op=="7":curl_headers()
-        elif op=="8":password_generator()
-        elif op=="9":temp_email()
-        elif op=="0":sys.exit()
-        else:
-            print(TEXT[LANG]["invalid"]); pause()
 
-if __name__=="__main__":
+        op = input(f"{TEXT[LANG]['menu']}: ").strip()
+
+        if op == "1": network_status()
+        elif op == "2": analyze_ip()
+        elif op == "3": resolve_dns()
+        elif op == "4": domain_ips()
+        elif op == "5": find_subdomains()
+        elif op == "6": site_info()
+        elif op == "7": curl_tool()
+        elif op == "8": fake_generator()
+        elif op == "9": clean_url()
+        elif op == "10": shorten_url()
+        elif op == "11": check_ip_scam(input("Ingrese IP a verificar: "))
+        elif op == "0": sys.exit()
+        else:
+            print(TEXT[LANG]["invalid"])
+            pause()
+
+if __name__ == "__main__":
     menu()
