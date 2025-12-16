@@ -15,7 +15,7 @@ import subprocess
 import random
 
 # ================= VERSION =================
-VERSION = "3.1"
+VERSION = "3.2"
 GITHUB_REPO = "https://github.com/MoralesM6614/analyzer-tool"
 VERSION_URL = "https://raw.githubusercontent.com/MoralesM6614/analyzer-tool/main/version.txt"
 
