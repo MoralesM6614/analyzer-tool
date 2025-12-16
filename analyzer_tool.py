@@ -14,8 +14,29 @@ import ipaddress
 import subprocess
 import random
 
+# ============ AUTO-INSTALADOR DEPENDENCIAS ============
+def ensure_dependency(module, pip_name=None):
+    try:
+        __import__(module)
+    except ImportError:
+        print(f"[+] Instalando dependencia faltante: {module}")
+        pkg = pip_name if pip_name else module
+        subprocess.check_call([
+            sys.executable, "-m", "pip", "install", pkg
+        ])
+
+ensure_dependency("faker")
+ensure_dependency("pycountry")
+ensure_dependency("phonenumbers")
+
+from faker import Faker
+import pycountry
+import unicodedata
+import phonenumbers
+from phonenumbers import PhoneNumberFormat
+
 # ================= VERSION =================
-VERSION = "3.2"
+VERSION = "1.2"
 GITHUB_REPO = "https://github.com/MoralesM6614/analyzer-tool"
 VERSION_URL = "https://raw.githubusercontent.com/MoralesM6614/analyzer-tool/main/version.txt"
 
@@ -42,17 +63,6 @@ TEXT = {
         "updated": "✔ Actualizado",
         "update_available": "⚠ Update disponible",
         "no_connection": "Sin conexión",
-    },
-    "EN": {
-        "menu": "Select an option",
-        "invalid": "Invalid option",
-        "press": "Press ENTER to continue...",
-        "not_found": "Not found",
-        "residential": "Residential network",
-        "vpn": "VPN / Proxy / Hosting",
-        "updated": "✔ Up to date",
-        "update_available": "⚠ Update available",
-        "no_connection": "No connection",
     }
 }
 
@@ -82,12 +92,11 @@ def check_update():
 def update_tool():
     clear()
     header("🔄 ACTUALIZAR HERRAMIENTA")
-    print("Actualizando desde GitHub...\n")
     try:
         subprocess.run(["git", "pull"], check=True)
-        print(C_GREEN + "\n✔ Herramienta actualizada correctamente" + C_RESET)
+        print(C_GREEN + "✔ Herramienta actualizada" + C_RESET)
     except:
-        print(C_RED + "\n✖ Error al actualizar (¿git instalado?)" + C_RESET)
+        print(C_RED + "✖ Error al actualizar" + C_RESET)
     pause()
 
 # ================= OPCIÓN 1 =================
@@ -101,28 +110,27 @@ def network_status():
             timeout=8
         ).json()
     except:
-        print(C_RED + "Error obteniendo datos de red" + C_RESET)
+        print(C_RED + "Error obteniendo datos" + C_RESET)
         pause()
         return
 
     net_type = TEXT[LANG]["vpn"] if data.get("proxy") or data.get("hosting") else TEXT[LANG]["residential"]
 
     print(f"""
-IP pública      : {ip_public}
-País            : {data.get('country')} [{data.get('countryCode')}]
-Ciudad          : {data.get('city')}
-ZIP             : {data.get('zip')}
-Proveedor red   : {data.get('isp')}
-ASN             : {data.get('as')}
-Tipo de red     : {net_type}
+IP pública    : {ip_public}
+País          : {data.get('country')} [{data.get('countryCode')}]
+Ciudad        : {data.get('city')}
+ZIP           : {data.get('zip')}
+ISP           : {data.get('isp')}
+ASN           : {data.get('as')}
+Tipo de red   : {net_type}
 """)
     pause()
 
 # ================= OPCIÓN 2 =================
 def analyze_ip():
     clear()
-    header("📌 ANÁLISIS TÉCNICO DE IP")
-
+    header("📌 ANÁLISIS DE IP")
     ip = input("IP objetivo: ").strip()
     try:
         ipaddress.ip_address(ip)
@@ -132,37 +140,32 @@ def analyze_ip():
         return
 
     data = requests.get(
-        f"http://ip-api.com/json/{ip}?fields=country,countryCode,regionName,region,city,zip,lat,lon,timezone,isp,org,as,proxy,hosting",
+        f"http://ip-api.com/json/{ip}?fields=country,countryCode,regionName,city,zip,isp,as,proxy,hosting",
         timeout=8
     ).json()
 
     net_type = TEXT[LANG]["vpn"] if data.get("proxy") or data.get("hosting") else TEXT[LANG]["residential"]
 
     print(f"""
-IP objetivo        : {ip}
-País               : {data.get('country')} [{data.get('countryCode')}]
-Región             : {data.get('regionName')} ({data.get('region')})
-Ciudad             : {data.get('city')}
-Código postal      : {data.get('zip')}
-Zona horaria       : {data.get('timezone')}
-Coordenadas        : {data.get('lat')}, {data.get('lon')}
-
-ISP                : {data.get('isp')}
-Organización       : {data.get('org')}
-ASN                : {data.get('as')}
-Tipo de IP         : {net_type}
+IP      : {ip}
+País    : {data.get('country')} [{data.get('countryCode')}]
+Ciudad  : {data.get('city')}
+ZIP     : {data.get('zip')}
+ISP     : {data.get('isp')}
+ASN     : {data.get('as')}
+Tipo    : {net_type}
 """)
     pause()
 
 # ================= OPCIÓN 3 =================
 def resolve_dns():
     clear()
-    header("📡 RESOLVER DOMINIO (DNS)")
+    header("📡 RESOLVER DNS")
     domain = input("Dominio: ").strip()
     try:
         _, _, ips = socket.gethostbyname_ex(domain)
         for ip in ips:
-            print(f"- {ip}")
+            print("-", ip)
     except:
         print(TEXT[LANG]["not_found"])
     pause()
@@ -172,63 +175,42 @@ def domain_ips():
     clear()
     header("🌐 IPv4 / IPv6")
     domain = input("Dominio: ").strip()
-    ipv4, ipv6 = set(), set()
     try:
         for info in socket.getaddrinfo(domain, None):
-            if info[0] == socket.AF_INET:
-                ipv4.add(info[4][0])
-            elif info[0] == socket.AF_INET6:
-                ipv6.add(info[4][0])
+            print(info[4][0])
     except:
         print(TEXT[LANG]["not_found"])
-        pause()
-        return
-    print("\nIPv4:")
-    for i in ipv4: print(" ", i)
-    print("\nIPv6:")
-    for i in ipv6: print(" ", i)
     pause()
 
 # ================= OPCIÓN 5 =================
 def find_subdomains():
     clear()
-    header("🧩 BUSCAR SUBDOMINIOS")
+    header("🧩 SUBDOMINIOS")
     domain = input("Dominio: ").strip()
-    found = set()
-    prefixes = ["www", "api", "m", "mail", "cdn", "static", "img"]
+    prefixes = ["www", "api", "mail", "cdn"]
+    encontrados = False
     for p in prefixes:
         try:
             socket.gethostbyname(f"{p}.{domain}")
-            found.add(f"{p}.{domain}")
+            print("-", f"{p}.{domain}")
+            encontrados = True
         except:
             pass
-    if found:
-        print(f"\nSubdominios encontrados ({len(found)}):")
-        for s in sorted(found):
-            print(" -", s)
-    else:
+    if not encontrados:
         print(TEXT[LANG]["not_found"])
     pause()
 
 # ================= OPCIÓN 6 =================
 def site_info():
     clear()
-    header("📄 INFORMACIÓN DEL SITIO")
+    header("📄 INFO DEL SITIO")
     url = input("URL: ").strip()
     if not url.startswith("http"):
         url = "http://" + url
     try:
         r = requests.get(url, timeout=8)
-        title = "N/A"
-        if "<title>" in r.text.lower():
-            title = r.text.lower().split("<title>")[1].split("</title>")[0]
-        print(f"""
-URL             : {r.url}
-Título          : {title}
-Servidor        : {r.headers.get('Server')}
-Contenido       : {r.headers.get('Content-Type')}
-Tamaño          : {len(r.content)/1024:.2f} KB
-""")
+        print("Servidor:", r.headers.get("Server"))
+        print("Tipo:", r.headers.get("Content-Type"))
     except:
         print("No responde")
     pause()
@@ -236,44 +218,78 @@ Tamaño          : {len(r.content)/1024:.2f} KB
 # ================= OPCIÓN 7 =================
 def curl_tool():
     clear()
-    header("🧰 CURL / HEADERS")
+    header("🧰 CURL")
     url = input("URL: ").strip()
     os.system(f"curl -I {url}")
     pause()
 
+# ====== FAKE ADDRESS FUNCTIONS ======
+def normalizar(txt):
+    txt = txt.lower()
+    txt = unicodedata.normalize("NFKD", txt)
+    return "".join(c for c in txt if not unicodedata.combining(c))
+
+def resolver_pais(nombre):
+    nombre = normalizar(nombre)
+    for c in pycountry.countries:
+        if normalizar(c.name) == nombre:
+            return c.alpha_2
+        if hasattr(c, "official_name") and normalizar(c.official_name) == nombre:
+            return c.alpha_2
+    return None
+
+def obtener_locale(alpha2):
+    for loc in Faker().locales:
+        if loc.endswith("_" + alpha2):
+            return loc
+    return None
+
+def telefono_real(alpha2):
+    try:
+        num = phonenumbers.example_number(alpha2)
+        return phonenumbers.format_number(num, PhoneNumberFormat.INTERNATIONAL)
+    except:
+        return "N/A"
+
 # ================= OPCIÓN 8 =================
 def generate_identity():
     clear()
-    header("🧍 GENERADOR DE IDENTIDADES / DIRECCIONES")
+    header("🏠 FAKE ADDRESS GENERATOR")
 
-    try:
-        amount = int(input("Cantidad de identidades: ").strip())
-        if amount < 1:
-            raise ValueError
-    except:
-        print(C_RED + "Cantidad inválida" + C_RESET)
+    pais = input("País a generar (nombre completo): ").strip()
+    alpha2 = resolver_pais(pais)
+
+    if not alpha2:
+        print(C_RED + "País no reconocido" + C_RESET)
         pause()
         return
 
-    try:
-        r = requests.get(f"https://randomuser.me/api/?results={amount}", timeout=10).json()
-        users = r["results"]
-    except:
-        print(C_RED + "Error obteniendo datos" + C_RESET)
+    locale = obtener_locale(alpha2)
+    if not locale:
+        print(C_RED + "País sin soporte de direcciones" + C_RESET)
         pause()
         return
 
-    for i, u in enumerate(users, 1):
-        print(C_GREEN + f"IDENTIDAD #{i}" + C_RESET)
-        print(f"""
-Nombre      : {u['name']['first']} {u['name']['last']}
-Dirección   : {u['location']['street']['number']} {u['location']['street']['name']}
-Ciudad      : {u['location']['city']}
-Estado      : {u['location']['state']}
-ZIP         : {u['location']['postcode']}
-País        : {u['location']['country']}
-Teléfono    : {u['phone']}
-Email       : {u['email']}
+    fake = Faker(locale)
+    Faker.seed(None)
+
+    nombre_completo = fake.name()
+    partes = nombre_completo.split(" ", 1)
+    nombre = partes[0]
+    apellido = partes[1] if len(partes) > 1 else ""
+
+    email = f"{nombre}.{apellido}".lower().replace(" ", "") + "@gmail.com"
+
+    print(C_GREEN + "IDENTIDAD GENERADA" + C_RESET)
+    print(f"""
+Nombre      : {nombre} {apellido}
+Dirección   : {fake.street_address()}
+Ciudad      : {fake.city()}
+Estado      : {fake.state() if hasattr(fake, 'state') else 'N/A'}
+ZIP         : {fake.postcode() if hasattr(fake, 'postcode') else 'N/A'}
+País        : {pais.title()}
+Teléfono    : {telefono_real(alpha2)}
+Email       : {email}
 """)
     pause()
 
@@ -300,7 +316,7 @@ def menu():
 5) 🧩 Buscar subdominios
 6) 📄 Información del sitio
 7) 🧰 Curl / Headers
-8) 🧍 Generar identidad / dirección
+8) 🏠 Fake Address Generator
 9) 🔄 Actualizar herramienta
 0) ❌ Salir
 """)
