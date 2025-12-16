@@ -12,7 +12,7 @@ import ipaddress
 from urllib.parse import urlparse
 
 # ================= VERSION =================
-VERSION = "1.0.1"
+VERSION = "3.0"
 
 # ================= COLORES =================
 C_RESET = "\033[0m"
@@ -57,22 +57,17 @@ TEXT = {
 }
 
 # ================= UPDATE ONLINE =================
-def check_update(silent=True):
+def check_update():
     try:
         url = "https://raw.githubusercontent.com/MoralesM6614/analyzer-tool/main/version.txt"
         remote_version = requests.get(url, timeout=5).text.strip()
 
         if remote_version != VERSION:
-            print(C_YELLOW + "\n⚠️ ACTUALIZACIÓN DISPONIBLE" + C_RESET)
-            print(f"📌 Versión local : {VERSION}")
-            print(f"🚀 Versión remota: {remote_version}")
-            print("🔗 https://github.com/MoralesM6614/analyzer-tool\n")
+            return ("update", remote_version)
         else:
-            if not silent:
-                print(C_GREEN + "\n✅ Estás usando la última versión\n" + C_RESET)
+            return ("ok", VERSION)
     except:
-        if not silent:
-            print(C_RED + "\n⚠️ No se pudo comprobar actualizaciones\n" + C_RESET)
+        return ("error", None)
 
 # ================= UTILIDADES =================
 def clear():
@@ -303,25 +298,20 @@ def curl_tool():
     os.system(f"curl -I {url}")
     pause()
 
-# ================= OPCIÓN 11 =================
-def about():
-    clear()
-    header("ℹ️ INFORMACIÓN")
-    print(f"""
-ANALYZER TOOL
-Versión : {VERSION}
-Contacto: https://t.me/Cracke2
-Plataforma: Android / Termux
-""")
-    pause()
-
 # ================= MENÚ =================
 def menu():
-    check_update(silent=True)
+    update_status, remote_version = check_update()
 
     while True:
         clear()
         header("ANALYZER TOOL")
+
+        if update_status == "update":
+            print(C_YELLOW + f"Versión {VERSION} • ⚠ Update disponible ({remote_version})" + C_RESET)
+        elif update_status == "ok":
+            print(C_GREEN + f"Versión {VERSION} • ✔ Actualizado" + C_RESET)
+        else:
+            print(C_RED + "Estado de versión desconocido (sin conexión)" + C_RESET)
 
         print("""
 1) 🌐 Estado de red actual
@@ -334,7 +324,6 @@ def menu():
 8) 📄 Información básica del sitio
 9) 🌍 Red del dominio
 10) 🧰 Curl / Headers
-11) ℹ️ Información
 0) ❌ Salir
 """)
 
@@ -350,7 +339,6 @@ def menu():
         elif op == "8": site_info()
         elif op == "9": domain_network_info()
         elif op == "10": curl_tool()
-        elif op == "11": about()
         elif op == "0": sys.exit()
         else:
             print(TEXT[LANG]["invalid"])
