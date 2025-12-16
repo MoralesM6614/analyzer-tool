@@ -6,336 +6,199 @@
 # Plataforma: Android / Termux
 # ============================================
 
-import os
-import sys
-import socket
-import requests
-import ipaddress
-import subprocess
-import random
-
-# ============ AUTO-INSTALADOR DEPENDENCIAS ============
-def ensure_dependency(module, pip_name=None):
-    try:
-        __import__(module)
-    except ImportError:
-        print(f"[+] Instalando dependencia faltante: {module}")
-        pkg = pip_name if pip_name else module
-        subprocess.check_call([
-            sys.executable, "-m", "pip", "install", pkg
-        ])
-
-ensure_dependency("faker")
-ensure_dependency("pycountry")
-ensure_dependency("phonenumbers")
-
-from faker import Faker
-import pycountry
-import unicodedata
-import phonenumbers
-from phonenumbers import PhoneNumberFormat
+import os, sys, socket, requests, ipaddress, subprocess, random
 
 # ================= VERSION =================
-VERSION = "1.2"
-GITHUB_REPO = "https://github.com/MoralesM6614/analyzer-tool"
-VERSION_URL = "https://raw.githubusercontent.com/MoralesM6614/analyzer-tool/main/version.txt"
+VERSION = "1.0"
 
 # ================= COLORES =================
-C_RESET  = "\033[0m"
-C_GREEN  = "\033[92m"
-C_RED    = "\033[91m"
-C_YELLOW = "\033[93m"
-C_BLUE   = "\033[94m"
-C_CYAN   = "\033[96m"
-C_BOLD   = "\033[1m"
+C_RESET="\033[0m"; C_GREEN="\033[92m"; C_RED="\033[91m"
+C_YELLOW="\033[93m"; C_CYAN="\033[96m"; C_BOLD="\033[1m"
 
-# ================= IDIOMA =================
-LANG = "ES"
+# ================= UTIL =================
+def clear(): os.system("clear")
+def pause(): input("\nPresione ENTER para continuar...")
 
-TEXT = {
-    "ES": {
-        "menu": "Seleccione una opción",
-        "invalid": "Opción inválida",
-        "press": "Presione ENTER para continuar...",
-        "not_found": "No encontrados",
-        "residential": "Red residencial",
-        "vpn": "VPN / Proxy / Hosting",
-        "updated": "✔ Actualizado",
-        "update_available": "⚠ Update disponible",
-        "no_connection": "Sin conexión",
-    }
-}
+def header(t):
+    print(C_CYAN + "="*70)
+    print(C_BOLD + t)
+    print("="*70 + C_RESET)
 
-# ================= UTILIDADES =================
-def clear():
-    os.system("clear")
-
-def pause():
-    input(f"\n{TEXT[LANG]['press']}")
-
-def header(title):
-    print(C_CYAN + "=" * 70)
-    print(C_BOLD + title)
-    print("=" * 70 + C_RESET)
-
-# ================= UPDATE =================
-def check_update():
-    try:
-        r = requests.get(VERSION_URL, timeout=5)
-        remote = r.text.strip()
-        if remote != VERSION:
-            return ("update", remote)
-        return ("ok", remote)
-    except:
-        return ("error", None)
-
-def update_tool():
-    clear()
-    header("🔄 ACTUALIZAR HERRAMIENTA")
-    try:
-        subprocess.run(["git", "pull"], check=True)
-        print(C_GREEN + "✔ Herramienta actualizada" + C_RESET)
-    except:
-        print(C_RED + "✖ Error al actualizar" + C_RESET)
-    pause()
-
-# ================= OPCIÓN 1 =================
+# ================= NETWORK =================
 def network_status():
-    clear()
-    header("🌐 ESTADO DE RED ACTUAL")
+    clear(); header("🌐 ESTADO DE RED ACTUAL")
     try:
-        ip_public = requests.get("https://api.ipify.org", timeout=5).text
-        data = requests.get(
-            "http://ip-api.com/json/?fields=country,countryCode,city,zip,isp,as,proxy,hosting",
-            timeout=8
-        ).json()
-    except:
-        print(C_RED + "Error obteniendo datos" + C_RESET)
-        pause()
-        return
-
-    net_type = TEXT[LANG]["vpn"] if data.get("proxy") or data.get("hosting") else TEXT[LANG]["residential"]
-
-    print(f"""
-IP pública    : {ip_public}
-País          : {data.get('country')} [{data.get('countryCode')}]
-Ciudad        : {data.get('city')}
-ZIP           : {data.get('zip')}
-ISP           : {data.get('isp')}
-ASN           : {data.get('as')}
-Tipo de red   : {net_type}
+        ip_pub = requests.get("https://api.ipify.org",timeout=5).text
+        d = requests.get("http://ip-api.com/json/?fields=country,countryCode,city,zip,isp,as,proxy,hosting",timeout=8).json()
+        net = "VPN / Proxy" if d.get("proxy") or d.get("hosting") else "Red residencial"
+        print(f"""
+IP pública : {ip_pub}
+País       : {d.get('country')} [{d.get('countryCode')}]
+Ciudad     : {d.get('city')}
+ZIP        : {d.get('zip')}
+ISP        : {d.get('isp')}
+ASN        : {d.get('as')}
+Tipo       : {net}
 """)
+    except:
+        print(C_RED+"Error de red"+C_RESET)
     pause()
 
-# ================= OPCIÓN 2 =================
+# ================= IP ANALYSIS =================
 def analyze_ip():
-    clear()
-    header("📌 ANÁLISIS DE IP")
-    ip = input("IP objetivo: ").strip()
-    try:
-        ipaddress.ip_address(ip)
-    except:
-        print(C_RED + "IP inválida" + C_RESET)
-        pause()
-        return
-
-    data = requests.get(
-        f"http://ip-api.com/json/{ip}?fields=country,countryCode,regionName,city,zip,isp,as,proxy,hosting",
-        timeout=8
-    ).json()
-
-    net_type = TEXT[LANG]["vpn"] if data.get("proxy") or data.get("hosting") else TEXT[LANG]["residential"]
-
+    clear(); header("📌 ANÁLISIS TÉCNICO DE IP")
+    ip=input("IP objetivo: ").strip()
+    try: ipaddress.ip_address(ip)
+    except: print("IP inválida"); pause(); return
+    d=requests.get(f"http://ip-api.com/json/{ip}",timeout=8).json()
     print(f"""
-IP      : {ip}
-País    : {data.get('country')} [{data.get('countryCode')}]
-Ciudad  : {data.get('city')}
-ZIP     : {data.get('zip')}
-ISP     : {data.get('isp')}
-ASN     : {data.get('as')}
-Tipo    : {net_type}
+IP        : {ip}
+País      : {d.get('country')} [{d.get('countryCode')}]
+Región    : {d.get('regionName')}
+Ciudad    : {d.get('city')}
+ZIP       : {d.get('zip')}
+Lat/Lon   : {d.get('lat')}, {d.get('lon')}
+ISP       : {d.get('isp')}
+ASN       : {d.get('as')}
 """)
     pause()
 
-# ================= OPCIÓN 3 =================
+# ================= DNS =================
 def resolve_dns():
-    clear()
-    header("📡 RESOLVER DNS")
-    domain = input("Dominio: ").strip()
+    clear(); header("📡 RESOLVER DNS")
+    d=input("Dominio: ").strip()
     try:
-        _, _, ips = socket.gethostbyname_ex(domain)
-        for ip in ips:
-            print("-", ip)
-    except:
-        print(TEXT[LANG]["not_found"])
+        for i in socket.gethostbyname_ex(d)[2]: print("-",i)
+    except: print("No encontrados")
     pause()
 
-# ================= OPCIÓN 4 =================
+# ================= IPs =================
 def domain_ips():
-    clear()
-    header("🌐 IPv4 / IPv6")
-    domain = input("Dominio: ").strip()
+    clear(); header("🌐 IPv4 / IPv6")
+    d=input("Dominio: ").strip()
+    v4,v6=set(),set()
     try:
-        for info in socket.getaddrinfo(domain, None):
-            print(info[4][0])
-    except:
-        print(TEXT[LANG]["not_found"])
+        for i in socket.getaddrinfo(d,None):
+            (v4 if i[0]==socket.AF_INET else v6).add(i[4][0])
+        print("IPv4:"); [print(" ",x) for x in v4]
+        print("\nIPv6:"); [print(" ",x) for x in v6]
+    except: print("No encontrados")
     pause()
 
-# ================= OPCIÓN 5 =================
+# ================= SUBDOMAINS =================
 def find_subdomains():
-    clear()
-    header("🧩 SUBDOMINIOS")
-    domain = input("Dominio: ").strip()
-    prefixes = ["www", "api", "mail", "cdn"]
-    encontrados = False
-    for p in prefixes:
-        try:
-            socket.gethostbyname(f"{p}.{domain}")
-            print("-", f"{p}.{domain}")
-            encontrados = True
-        except:
-            pass
-    if not encontrados:
-        print(TEXT[LANG]["not_found"])
+    clear(); header("🧩 SUBDOMINIOS")
+    d=input("Dominio: ").strip()
+    pref=["www","api","mail","m","cdn","static"]
+    f=[]
+    for p in pref:
+        try: socket.gethostbyname(f"{p}.{d}"); f.append(f"{p}.{d}")
+        except: pass
+    if f:
+        for s in f: print("-",s)
+    else: print("No encontrados")
     pause()
 
-# ================= OPCIÓN 6 =================
+# ================= SITE INFO =================
 def site_info():
-    clear()
-    header("📄 INFO DEL SITIO")
-    url = input("URL: ").strip()
-    if not url.startswith("http"):
-        url = "http://" + url
+    clear(); header("📄 INFO DEL SITIO")
+    u=input("URL: ").strip()
+    if not u.startswith("http"): u="http://"+u
     try:
-        r = requests.get(url, timeout=8)
-        print("Servidor:", r.headers.get("Server"))
-        print("Tipo:", r.headers.get("Content-Type"))
-    except:
-        print("No responde")
-    pause()
-
-# ================= OPCIÓN 7 =================
-def curl_tool():
-    clear()
-    header("🧰 CURL")
-    url = input("URL: ").strip()
-    os.system(f"curl -I {url}")
-    pause()
-
-# ====== FAKE ADDRESS FUNCTIONS ======
-def normalizar(txt):
-    txt = txt.lower()
-    txt = unicodedata.normalize("NFKD", txt)
-    return "".join(c for c in txt if not unicodedata.combining(c))
-
-def resolver_pais(nombre):
-    nombre = normalizar(nombre)
-    for c in pycountry.countries:
-        if normalizar(c.name) == nombre:
-            return c.alpha_2
-        if hasattr(c, "official_name") and normalizar(c.official_name) == nombre:
-            return c.alpha_2
-    return None
-
-def obtener_locale(alpha2):
-    for loc in Faker().locales:
-        if loc.endswith("_" + alpha2):
-            return loc
-    return None
-
-def telefono_real(alpha2):
-    try:
-        num = phonenumbers.example_number(alpha2)
-        return phonenumbers.format_number(num, PhoneNumberFormat.INTERNATIONAL)
-    except:
-        return "N/A"
-
-# ================= OPCIÓN 8 =================
-def generate_identity():
-    clear()
-    header("🏠 FAKE ADDRESS GENERATOR")
-
-    pais = input("País a generar (nombre completo): ").strip()
-    alpha2 = resolver_pais(pais)
-
-    if not alpha2:
-        print(C_RED + "País no reconocido" + C_RESET)
-        pause()
-        return
-
-    locale = obtener_locale(alpha2)
-    if not locale:
-        print(C_RED + "País sin soporte de direcciones" + C_RESET)
-        pause()
-        return
-
-    fake = Faker(locale)
-    Faker.seed(None)
-
-    nombre_completo = fake.name()
-    partes = nombre_completo.split(" ", 1)
-    nombre = partes[0]
-    apellido = partes[1] if len(partes) > 1 else ""
-
-    email = f"{nombre}.{apellido}".lower().replace(" ", "") + "@gmail.com"
-
-    print(C_GREEN + "IDENTIDAD GENERADA" + C_RESET)
-    print(f"""
-Nombre      : {nombre} {apellido}
-Dirección   : {fake.street_address()}
-Ciudad      : {fake.city()}
-Estado      : {fake.state() if hasattr(fake, 'state') else 'N/A'}
-ZIP         : {fake.postcode() if hasattr(fake, 'postcode') else 'N/A'}
-País        : {pais.title()}
-Teléfono    : {telefono_real(alpha2)}
-Email       : {email}
+        r=requests.get(u,timeout=8)
+        t="N/A"
+        if "<title>" in r.text.lower():
+            t=r.text.lower().split("<title>")[1].split("</title>")[0]
+        print(f"""
+URL      : {r.url}
+Título   : {t}
+Servidor : {r.headers.get('Server')}
+Tipo     : {r.headers.get('Content-Type')}
 """)
+    except: print("No responde")
     pause()
 
-# ================= MENÚ =================
-def menu():
-    status, remote = check_update()
+# ================= CURL =================
+def curl_tool():
+    clear(); header("🧰 CURL")
+    u=input("URL: ").strip()
+    os.system(f"curl -I {u}")
+    pause()
 
+# ================= CPF / CEP =================
+def gerar_cpf():
+    n=[random.randint(0,9) for _ in range(9)]
+    def d(x): r=(sum(v*(len(x)+1-i) for i,v in enumerate(x))*10)%11; return 0 if r==10 else r
+    n.append(d(n)); n.append(d(n))
+    return f"{n[0]}{n[1]}{n[2]}.{n[3]}{n[4]}{n[5]}.{n[6]}{n[7]}{n[8]}-{n[9]}{n[10]}"
+
+def gerar_cep(): return f"{random.randint(10000,99999)}-{random.randint(100,999)}"
+
+# ================= FAKE ADDRESS =================
+def fake_address():
+    clear(); header("🏠 FAKE ADDRESS GENERATOR")
+    c=input("Código país (br,co,ar,cl,mx,us,uk,de,in): ").lower()
+
+    data={
+        "br":{"name":["João","Lucas","Marcos"],"ln":["Silva","Pereira"],"city":"São Paulo"},
+        "co":{"name":["Juan","Carlos"],"ln":["Gómez","Pérez"],"city":"Bogotá"},
+        "ar":{"name":["Mateo","Lucas"],"ln":["Gómez","Fernández"],"city":"Buenos Aires"},
+        "cl":{"name":["Diego","Sebastián"],"ln":["Rojas","Muñoz"],"city":"Santiago"},
+        "mx":{"name":["Luis","Jorge"],"ln":["Hernández","López"],"city":"CDMX"},
+        "us":{"name":["John","Michael"],"ln":["Smith","Brown"],"city":"New York"},
+        "uk":{"name":["Oliver","Harry"],"ln":["Wilson","Taylor"],"city":"London"},
+        "de":{"name":["Lukas","Leon"],"ln":["Müller","Schmidt"],"city":"Berlin"},
+        "in":{"name":["Rahul","Amit"],"ln":["Sharma","Patel"],"city":"Mumbai"},
+    }
+
+    if c not in data:
+        print("País no soportado"); pause(); return
+
+    d=data[c]
+    fn=random.choice(d["name"]); ln=random.choice(d["ln"])
+    street=f"{random.randint(10,999)} Main Street"
+
+    print(f"""
+Nombre     : {fn} {ln}
+Dirección  : {street}
+Ciudad     : {d['city']}
+País       : {c.upper()}
+""")
+
+    if c=="br":
+        print(f"CPF        : {gerar_cpf()}")
+        print(f"CEP        : {gerar_cep()}")
+
+    pause()
+
+# ================= MENU =================
+def menu():
     while True:
         clear()
         header("ANALYZER TOOL")
-
-        if status == "ok":
-            print(C_GREEN + f"Versión {VERSION} • {TEXT[LANG]['updated']}" + C_RESET)
-        elif status == "update":
-            print(C_YELLOW + f"Versión {VERSION} • {TEXT[LANG]['update_available']} ({remote})" + C_RESET)
-        else:
-            print(C_RED + TEXT[LANG]["no_connection"] + C_RESET)
-
+        print(f"Versión {VERSION} • Cracke2 • https://t.me/Cracke2\n")
         print("""
-1) 🌐 Estado de red actual
-2) 📌 Análisis técnico de IP
-3) 📡 Resolver dominio DNS
+1) 🌐 Estado de red
+2) 📌 Análisis IP
+3) 📡 DNS
 4) 🌐 IPv4 / IPv6
-5) 🧩 Buscar subdominios
-6) 📄 Información del sitio
-7) 🧰 Curl / Headers
+5) 🧩 Subdominios
+6) 📄 Info sitio
+7) 🧰 Curl
 8) 🏠 Fake Address Generator
-9) 🔄 Actualizar herramienta
 0) ❌ Salir
 """)
+        o=input("Seleccione una opción: ").strip()
+        if o=="1": network_status()
+        elif o=="2": analyze_ip()
+        elif o=="3": resolve_dns()
+        elif o=="4": domain_ips()
+        elif o=="5": find_subdomains()
+        elif o=="6": site_info()
+        elif o=="7": curl_tool()
+        elif o=="8": fake_address()
+        elif o=="0": sys.exit()
+        else: print("Opción inválida"); pause()
 
-        op = input(f"{TEXT[LANG]['menu']}: ").strip()
-
-        if   op == "1": network_status()
-        elif op == "2": analyze_ip()
-        elif op == "3": resolve_dns()
-        elif op == "4": domain_ips()
-        elif op == "5": find_subdomains()
-        elif op == "6": site_info()
-        elif op == "7": curl_tool()
-        elif op == "8": generate_identity()
-        elif op == "9": update_tool()
-        elif op == "0": sys.exit()
-        else:
-            print(TEXT[LANG]["invalid"])
-            pause()
-
-if __name__ == "__main__":
+if __name__=="__main__":
     menu()
