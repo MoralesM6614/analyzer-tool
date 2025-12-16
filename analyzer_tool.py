@@ -39,17 +39,6 @@ TEXT = {
         "updated": "✔ Actualizado",
         "update_available": "⚠ Update disponible",
         "no_connection": "Sin conexión",
-    },
-    "EN": {
-        "menu": "Select an option",
-        "invalid": "Invalid option",
-        "press": "Press ENTER to continue...",
-        "not_found": "Not found",
-        "residential": "Residential network",
-        "vpn": "VPN / Proxy / Hosting",
-        "updated": "✔ Up to date",
-        "update_available": "⚠ Update available",
-        "no_connection": "No connection",
     }
 }
 
@@ -82,141 +71,125 @@ def check_update():
 def update_tool():
     clear()
     header("🔄 ACTUALIZAR HERRAMIENTA")
-    print("Actualizando desde GitHub...\n")
     try:
         subprocess.run(["git", "pull"], check=True)
-        print(C_GREEN + "\n✔ Herramienta actualizada correctamente" + C_RESET)
+        print(C_GREEN + "\n✔ Herramienta actualizada" + C_RESET)
     except:
-        print(C_RED + "\n✖ Error al actualizar (¿git instalado?)" + C_RESET)
+        print(C_RED + "\n✖ Error al actualizar" + C_RESET)
     pause()
 
-# ================= FAKE ADDRESS AUTO =================
-def fake_address_auto():
+# ================= FAKE ADDRESS =================
+def fake_address():
     clear()
-    header("🏠 FAKE ADDRESS GENERATOR (AUTO COUNTRY)")
+    header("🏠 FAKE ADDRESS GENERATOR")
+
+    country = input("Código de país (us, co, br, in, uk, de, auto): ").strip().lower()
+
+    if country == "auto":
+        try:
+            geo = requests.get("http://ip-api.com/json/?fields=countryCode", timeout=5).json()
+            country = geo.get("countryCode", "").lower()
+        except:
+            print("No se pudo detectar país")
+            pause()
+            return
 
     try:
-        geo = requests.get(
-            "http://ip-api.com/json/?fields=country,countryCode",
-            timeout=5
-        ).json()
-
-        country = geo.get("country")
-        code = geo.get("countryCode", "").lower()
-
-        flags = {
-            "us": "🇺🇸", "br": "🇧🇷", "co": "🇨🇴", "mx": "🇲🇽",
-            "ar": "🇦🇷", "cl": "🇨🇱", "gb": "🇬🇧",
-            "de": "🇩🇪", "in": "🇮🇳"
-        }
-
-        r = requests.get(
-            f"https://randomuser.me/api/?nat={code}",
-            timeout=10
-        ).json()
-
-        user = r["results"][0]
-        loc = user["location"]
+        r = requests.get(f"https://randomuser.me/api/?nat={country}", timeout=10).json()
+        u = r["results"][0]
+        l = u["location"]
 
         print(f"""
-Adress For {loc['country']} {flags.get(code, "")}
-━━━━━━━━━━━━━━━━━━━
-- Name : {user['name']['first']} {user['name']['last']}
-- Street Address : {loc['street']['number']} {loc['street']['name']}
-- City : {loc['city']}
-- State : {loc['state']}
-- Postal Code : {loc['postcode']}
-- Country : {loc['country']}
-- Phone : {user['phone']}
-- Email : {user['email']}
-━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Adress For {l['country']}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Name : {u['name']['first']} {u['name']['last']}
+- Street Address : {l['street']['number']} {l['street']['name']}
+- City : {l['city']}
+- State : {l['state']}
+- Postal Code : {l['postcode']}
+- Country : {l['country']}
+- Phone : {u['phone']}
+- Email : {u['email']}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """)
 
     except:
-        print(C_RED + "No se pudo generar la dirección automáticamente" + C_RESET)
+        print("País no soportado o error de conexión")
 
     pause()
 
-# ================= OPCIONES EXISTENTES =================
+# ================= FUNCIONES ORIGINALES =================
 def network_status():
     clear()
     header("🌐 ESTADO DE RED ACTUAL")
-
-    try:
-        ip_public = requests.get("https://api.ipify.org", timeout=5).text
-        data = requests.get(
-            "http://ip-api.com/json/?fields=country,countryCode,city,zip,isp,as,proxy,hosting",
-            timeout=8
-        ).json()
-    except:
-        print(C_RED + "Error obteniendo datos de red" + C_RESET)
-        pause()
-        return
-
-    net_type = TEXT[LANG]["vpn"] if data.get("proxy") or data.get("hosting") else TEXT[LANG]["residential"]
-
+    ip_public = requests.get("https://api.ipify.org").text
+    data = requests.get("http://ip-api.com/json/").json()
     print(f"""
-IP pública      : {ip_public}
-País            : {data.get('country')} [{data.get('countryCode')}]
-Ciudad          : {data.get('city')}
-ZIP             : {data.get('zip')}
-Proveedor red   : {data.get('isp')}
-ASN             : {data.get('as')}
-Tipo de red     : {net_type}
+IP Pública : {ip_public}
+País       : {data.get('country')}
+Ciudad     : {data.get('city')}
+ISP        : {data.get('isp')}
 """)
     pause()
 
 def analyze_ip():
     clear()
-    header("📌 ANÁLISIS TÉCNICO DE IP")
-
-    ip = input("IP objetivo: ").strip()
+    header("📌 ANÁLISIS IP")
+    ip = input("IP: ")
     try:
         ipaddress.ip_address(ip)
+        data = requests.get(f"http://ip-api.com/json/{ip}").json()
+        print(data)
     except:
-        print(C_RED + "IP inválida" + C_RESET)
-        pause()
-        return
-
-    data = requests.get(
-        f"http://ip-api.com/json/{ip}?fields=country,countryCode,regionName,region,city,zip,lat,lon,timezone,isp,org,as,proxy,hosting",
-        timeout=8
-    ).json()
-
-    net_type = TEXT[LANG]["vpn"] if data.get("proxy") or data.get("hosting") else TEXT[LANG]["residential"]
-
-    print(f"""
-IP objetivo        : {ip}
-País               : {data.get('country')} [{data.get('countryCode')}]
-Región             : {data.get('regionName')} ({data.get('region')})
-Ciudad             : {data.get('city')}
-Código postal      : {data.get('zip')}
-Zona horaria       : {data.get('timezone')}
-Coordenadas        : {data.get('lat')}, {data.get('lon')}
-
-ISP                : {data.get('isp')}
-Organización       : {data.get('org')}
-ASN                : {data.get('as')}
-Tipo de IP         : {net_type}
-""")
+        print("IP inválida")
     pause()
 
 def resolve_dns():
     clear()
-    header("📡 RESOLVER DOMINIO (DNS)")
-    domain = input("Dominio: ").strip()
+    header("📡 DNS")
+    d = input("Dominio: ")
     try:
-        _, _, ips = socket.gethostbyname_ex(domain)
-        for ip in ips:
-            print("-", ip)
+        print(socket.gethostbyname_ex(d)[2])
     except:
-        print(TEXT[LANG]["not_found"])
+        print("No encontrado")
+    pause()
+
+def domain_ips():
+    clear()
+    header("🌐 IPv4 / IPv6")
+    d = input("Dominio: ")
+    try:
+        for i in socket.getaddrinfo(d, None):
+            print(i[4][0])
+    except:
+        print("No encontrado")
+    pause()
+
+def find_subdomains():
+    clear()
+    header("🧩 SUBDOMINIOS")
+    d = input("Dominio: ")
+    for p in ["www", "api", "mail", "cdn"]:
+        try:
+            socket.gethostbyname(f"{p}.{d}")
+            print(f"{p}.{d}")
+        except:
+            pass
+    pause()
+
+def site_info():
+    clear()
+    header("📄 INFO WEB")
+    url = input("URL: ")
+    r = requests.get(url)
+    print("Server:", r.headers.get("Server"))
     pause()
 
 def curl_tool():
     clear()
-    header("🧰 CURL / HEADERS")
-    url = input("URL: ").strip()
+    header("🧰 CURL")
+    url = input("URL: ")
     os.system(f"curl -I {url}")
     pause()
 
@@ -229,33 +202,39 @@ def menu():
         header("ANALYZER TOOL")
 
         if status == "ok":
-            print(C_GREEN + f"Versión {VERSION} • {TEXT[LANG]['updated']}" + C_RESET)
+            print(C_GREEN + f"Versión {VERSION} • Actualizado" + C_RESET)
         elif status == "update":
-            print(C_YELLOW + f"Versión {VERSION} • {TEXT[LANG]['update_available']} ({remote})" + C_RESET)
+            print(C_YELLOW + f"Versión {VERSION} • Update disponible ({remote})" + C_RESET)
         else:
-            print(C_RED + TEXT[LANG]["no_connection"] + C_RESET)
+            print(C_RED + "Estado desconocido" + C_RESET)
 
         print("""
-1) 🌐 Estado de red actual
-2) 📌 Análisis técnico de IP
-3) 📡 Resolver dominio DNS
-4) 🧰 Curl / Headers
-5) 🏠 Fake Address (auto país)
-6) 🔄 Actualizar herramienta
+1) 🌐 Estado de red
+2) 📌 Análisis IP
+3) 📡 Resolver DNS
+4) 🌐 IPv4 / IPv6
+5) 🧩 Subdominios
+6) 📄 Info sitio
+7) 🧰 Curl
+8) 🔄 Actualizar herramienta
+9) 🏠 Fake Address Generator
 0) ❌ Salir
 """)
 
-        op = input(f"{TEXT[LANG]['menu']}: ").strip()
+        op = input("Seleccione opción: ")
 
         if op == "1": network_status()
         elif op == "2": analyze_ip()
         elif op == "3": resolve_dns()
-        elif op == "4": curl_tool()
-        elif op == "5": fake_address_auto()
-        elif op == "6": update_tool()
+        elif op == "4": domain_ips()
+        elif op == "5": find_subdomains()
+        elif op == "6": site_info()
+        elif op == "7": curl_tool()
+        elif op == "8": update_tool()
+        elif op == "9": fake_address()
         elif op == "0": sys.exit()
         else:
-            print(TEXT[LANG]["invalid"])
+            print("Opción inválida")
             pause()
 
 if __name__ == "__main__":
